@@ -59,3 +59,7 @@ The app may throw an access denied exception on Windows if your user does not ha
 > netsh http add urlacl url=http://+:9184/metrics user=DOMAIN\user
 
 The port number you need to specify here is the publishing port, 9184 by default.
+
+# Why does this app need TShark, why not just open a socket and listen?!?
+
+Implementations of the TZSP protocol can truncate packets under some conditions, which might result in the operating system filtering them out and never handing them over to the listening app. Using TShark ensures that we can process even truncated packets.
