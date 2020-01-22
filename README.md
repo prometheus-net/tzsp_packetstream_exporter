@@ -25,7 +25,7 @@ MikroTik RouterOS has [built-in support for TZSP packet capture](https://wiki.mi
 1. Execute the app as `tzsp_packetstream_exporter --interface eth0 --port 1234` (see `--help` for more info).
 1. Navigate to http://hostname:9184/metrics to explore the available metrics.
 1. Register `hostname:9184` in your Prometheus configuration as a scrape target.
-1. If using Grafana, install the template dashboard.
+1. If using Grafana, [install the template dashboard](https://grafana.com/grafana/dashboards/11609).
 
 Example Prometheus scrape configuration:
 
