@@ -48,7 +48,19 @@ You could simply direct them at the same analyzer but this will lead to the resu
 
 If you want the results separated in Prometheus, run a separate instance of the analyzer, accepting packets and publishing results on individual ports (`--listen-port` and `--publish-port`, respectively).
 
+# (Linux) On startup, I see "Failed to create directory ..." - what's wrong?
+
+This appears to be a .NET Core defect, where the startup loader attempts to extract files to `/var/tmp` directory that is not always writable: https://github.com/dotnet/core-setup/issues/8882.
+
+To work around this issue, set a custom runtime bundle extraction directory:
+
+```
+export DOTNET_BUNDLE_EXTRACT_BASE_DIR=$HOME/.net
+```
+
 # (Any OS) Why do I get a permissions-related error on startup?
+
+> tshark: Couldn't run /usr/bin/dumpcap in child process: Permission denied
 
 The user runnig the app must have the required permissions to use TShark. On Linux, you may need to add the user to the `wireshark` group, depending on system configuration.
 
