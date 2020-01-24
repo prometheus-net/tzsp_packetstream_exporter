@@ -67,7 +67,9 @@ namespace TzspPacketStreamExporter
                         if (parts.Length != 2)
                             throw new NotSupportedException("Output line did not have expected 2 components.");
 
-                        packetBytesHex = parts[0];
+                        // On some systems there are colons. On others there are not!
+                        // Language/version differences? Whatever, get rid of them.
+                        packetBytesHex = parts[0].Replace(":", "");
                         packetType = parts[1];
 
                         var packetBytes = Helpers.Convert.HexStringToByteArray(packetBytesHex);
