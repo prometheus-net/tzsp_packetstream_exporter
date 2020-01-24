@@ -15,7 +15,7 @@ System requirements:
 
 The `tshark` command must be available in a new terminal. You may need to [register the installation directory in the PATH environment variable](https://www.architectryan.com/2018/03/17/add-to-the-path-on-windows-10/).
 
-**This app only performs the analysis of the packet stream, not the initial capture.** You need to use router to capture the packet stream and provide it in TZSP format to this app.
+**This app only performs the analysis of the packet stream, not the initial capture.** You need to configure a router to capture the packet stream and provide it in TZSP format to this app.
 
 MikroTik RouterOS has [built-in support for TZSP packet capture](https://wiki.mikrotik.com/wiki/Manual:Tools/Packet_Sniffer). You can also define a [MikroTik firewall mangle rule](https://wiki.mikrotik.com/wiki/Manual:IP/Firewall/Mangle) with the `sniff-tzsp` action, for detailed filtering of captured traffic.
 
