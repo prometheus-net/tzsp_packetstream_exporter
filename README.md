@@ -22,7 +22,7 @@ MikroTik RouterOS has [built-in support for TZSP packet capture](https://wiki.mi
 # Quick start
 
 1. Set up a TZSP packet stream to the server this app will be running on. Pick an arbitrary port number for the stream, for example 1234.
-1. Execute the app as `tzsp_packetstream_exporter --interface eth0 --port 1234` (see `--help` for more info).
+1. Execute the app as `tzsp_packetstream_exporter --interface eth0 --listen-port 1234` (see `--help` for more info).
 1. Navigate to http://hostname:9184/metrics to explore the available metrics.
 1. Register `hostname:9184` in your Prometheus configuration as a scrape target.
 1. If using Grafana, [install the template dashboard](https://grafana.com/grafana/dashboards/11609).
@@ -44,9 +44,7 @@ Only TCP and UDP are analyzed - other transport-level protocols are simply "unkn
 
 # How do I analyze multiple parallel packet streams?
 
-You could simply direct them at the same analyzer but this will lead to the results being merged.
-
-If you want the results separated in Prometheus, run a separate instance of the analyzer, accepting packets and publishing results on individual ports (`--listen-port` and `--publish-port`, respectively).
+You can direct multiple TZSP streams to the same analyzer, either on the same port or separate ports (using multiple `--listen-port` options). The output metrics carry a label indicating the listen port the data arrived on.
 
 # (Linux) On startup, I see "Failed to create directory ..." - what's wrong?
 

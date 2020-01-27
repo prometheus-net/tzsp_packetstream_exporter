@@ -2,7 +2,7 @@
   "profiles": {
     "TzspPacketStreamExporter": {
       "commandName": "Project",
-      "commandLineArgs": "--interface 1 --port 5429"
+      "commandLineArgs": "--interface 1 --port 5429 --port 5430"
     }
   }
 }

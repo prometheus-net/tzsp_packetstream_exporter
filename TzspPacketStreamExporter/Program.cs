@@ -3,6 +3,7 @@ using Mono.Options;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 
 namespace TzspPacketStreamExporter
@@ -70,11 +71,12 @@ namespace TzspPacketStreamExporter
             var options = new OptionSet
             {
                 GetVersionString(),
+                "Usage: --interface eth0 --listen-port 19345 --listen-port 19346",
                 "",
                 "General",
                 { "h|?|help", "Displays usage instructions.", val => showHelp = val != null },
                 { "interface=", "Name or number of the network interface (e.g. 1 or eth5 or \"Ethernet 3\"). Must match an entry in the 'tshark -D' list.", val => _logic.ListenInterface = val?.Trim('"') ?? "" },
-                { "listen-port|port=", "UDP port to listen on for an incoming TZSP packet stream.", (ushort val) => _logic.ListenPort = val },
+                { "listen-port|port=", "UDP port to listen on for an incoming TZSP packet stream. Use multiple times to listen on multiple ports.", (ushort val) => _logic.ListenPorts.Add(val) },
                 { "publish-port|publish=", $"TCP port to publish Prometheus metrics on. Defaults to {_logic.PublishPort}.", (ushort val) => _logic.PublishPort = val },
 
                 "",
@@ -100,6 +102,12 @@ namespace TzspPacketStreamExporter
 
                 if (_logic.ListenInterface.Contains('"'))
                     throw new OptionException("The network interface name must not contain the double quote character.", "interface");
+
+                if (_logic.ListenPorts.Count == 0)
+                    throw new OptionException("You must specify at least one port to listen on.", "listen-port");
+
+                if (_logic.ListenPorts.Count != _logic.ListenPorts.Distinct().Count())
+                    throw new OptionException("You have specified duplicate ports to listen on. Did you make a typo?", "listen-port");
 
                 if (string.IsNullOrWhiteSpace(_logic.ListenInterface))
                     throw new OptionException("The network interface name must be specified.", "interface");
@@ -134,7 +142,9 @@ namespace TzspPacketStreamExporter
             // We default to displaying Info or higher but allow this to be reconfiured later, if the user wishes.
             _filteringLogListener = new FilteringLogListener(new ConsoleLogListener())
             {
+#if !DEBUG
                 MinimumSeverity = LogEntrySeverity.Info
+#endif
             };
 
             Log.Default.RegisterListener(_filteringLogListener);
