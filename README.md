@@ -44,16 +44,6 @@ Only IPv4 packets are analyzed - IPv6 is ignored.
 
 You can direct multiple TZSP streams to the same analyzer, either on the same port or separate ports (using multiple `--listen-port` options). The output metrics carry a label indicating the listen port the data arrived on.
 
-# (Linux) On startup, I see "Failed to create directory ..." - what's wrong?
-
-This appears to be a .NET Core defect, where the startup loader attempts to extract files to `/var/tmp` directory that is not always writable: https://github.com/dotnet/core-setup/issues/8882.
-
-To work around this issue, set a custom runtime bundle extraction directory:
-
-```
-export DOTNET_BUNDLE_EXTRACT_BASE_DIR=$HOME/.net
-```
-
 # (Any OS) Why do I get a permissions-related error on startup?
 
 > tshark: Couldn't run /usr/bin/dumpcap in child process: Permission denied
