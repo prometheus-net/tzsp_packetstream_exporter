@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -349,12 +350,10 @@ namespace TzspPacketStreamExporter
                 // unknown protocol
             }
 
-            string protocolName = protocol switch
-            {
-                6 => "tcp",
-                17 => "udp",
-                _ => "unknown"
-            };
+            string protocolName = "unknown";
+
+            if (Enum.IsDefined(typeof(ProtocolType), (int)protocol))
+                protocolName = ((ProtocolType)protocol).ToString().ToLowerInvariant();
 
             BytesBase.WithLabels(sourceAddressString, sourceAddressType, destinationAddressString, destinationAddressType, protocolName, listenPort.ToString()).Inc(totalPacketLengthIncludingIpHeader);
             PacketsBase.WithLabels(sourceAddressString, sourceAddressType, destinationAddressString, destinationAddressType, protocolName, listenPort.ToString()).Inc();

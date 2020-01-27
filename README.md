@@ -40,8 +40,6 @@ Example Prometheus scrape configuration:
 
 Only IPv4 packets are analyzed - IPv6 is ignored.
 
-Only TCP and UDP are analyzed - other transport-level protocols are simply "unknown".
-
 # How do I analyze multiple parallel packet streams?
 
 You can direct multiple TZSP streams to the same analyzer, either on the same port or separate ports (using multiple `--listen-port` options). The output metrics carry a label indicating the listen port the data arrived on.
