@@ -39,148 +39,157 @@ namespace TzspPacketStreamExporter
                 throw;
             }
 
-            // We cancel processing if TShark exits or we get our own higher level CT signaled.
-            var cancelProcessingCts = CancellationTokenSource.CreateLinkedTokenSource(cancel);
-            var stdoutFinished = new SemaphoreSlim(0, 1);
-            var stderrFinished = new SemaphoreSlim(0, 1);
-
-            void ConsumeStandardOutput(Stream stdout)
-            {
-                // Text mode output, each line consisting of:
-                // 1. Hex string of packet bytes (starting with either outer UDP header or inner TZSP header)
-                // 2. A space character.
-                // 3. Type of the data ("eth:ethertype:ip:data" - UDP header, "eth:ethertype:ip:udp:data" - TZSP header)
-                // 4. A space character.
-                // 5. The destination UDP port of the TZSP protocol ("udp.dstport") but ONLY if type of data is TZSP header.
-                //    If type of data is UDP header, we need to parse the port ourselves.
-
-                try
-                {
-                    var reader = new StreamReader(stdout, Encoding.UTF8, leaveOpen: true);
-
-                    while (true)
-                    {
-                        var line = reader.ReadLineAsync()
-                            .WithAbandonment(cancelProcessingCts.Token)
-                            .WaitAndUnwrapExceptions();
-
-                        if (line == null)
-                            break; // End of stream.
-
-                        string packetBytesHex;
-                        string packetType;
-
-                        var parts = line.Split(' ');
-                        if (parts.Length != 3)
-                            throw new NotSupportedException("Output line did not have expected number of components.");
-
-                        // On some systems there are colons. On others there are not!
-                        // Language/version differences? Whatever, get rid of them.
-                        packetBytesHex = parts[0].Replace(":", "");
-                        packetType = parts[1];
-
-                        var packetBytes = Helpers.Convert.HexStringToByteArray(packetBytesHex);
-
-                        try
-                        {
-                            if (packetType == "eth:ethertype:ip:data")
-                            {
-                                ProcessTzspPacketWithUdpHeader(packetBytes);
-                            }
-                            else if (packetType == "eth:ethertype:ip:udp:data")
-                            {
-                                var listenPort = ushort.Parse(parts[2]);
-                                ProcessTzspPacket(packetBytes, listenPort);
-                            }
-                            else
-                            {
-                                throw new NotSupportedException("Unexpected packet type: " + packetType);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _log.Error("Ignoring unsupported packet: " + Helpers.Debug.GetAllExceptionMessages(ex));
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // It's OK, we were cancelled because processing is finished.
-                }
-                catch (Exception ex)
-                {
-                    // If we get here, something is fatally wrong with parsing logic or TShark output.
-                    _log.Error(Helpers.Debug.GetAllExceptionMessages(ex));
-
-                    // This should not happen, so stop everything. Gracefully, so we flush logs.
-                    Environment.ExitCode = -1;
-                    Program.MasterCancellation.Cancel();
-                }
-                finally
-                {
-                    stdoutFinished.Release();
-                }
-            };
-
-            void ConsumeStandardError(Stream stderr)
-            {
-                // Only errors should show up here. We will simply log them for now
-                // - only if tshark exits do we consider it a fatal error.
-
-                try
-                {
-                    var reader = new StreamReader(stderr, Encoding.UTF8, leaveOpen: true);
-
-                    while (true)
-                    {
-                        var line = reader.ReadLineAsync()
-                            .WithAbandonment(cancelProcessingCts.Token)
-                            .WaitAndUnwrapExceptions();
-
-                        if (line == null)
-                            break; // End of stream.
-
-                        _log.Error(line);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // It's OK, we were cancelled because processing is finished.
-                }
-                finally
-                {
-                    stderrFinished.Release();
-                }
-            };
-
-            var tsharkCommand = new ExternalTool
-            {
-                ExecutablePath = Constants.TsharkExecutableName,
-                ResultHeuristics = ExternalToolResultHeuristics.Linux,
-                Arguments = @$"-i ""{ListenInterface}"" -f ""{MakeTsharkFilterString()}"" -p -T fields -e data.data -e frame.protocols -e udp.dstport -Eseparator=/s -Q",
-                StandardOutputConsumer = ConsumeStandardOutput,
-                StandardErrorConsumer = ConsumeStandardError
-            };
-
-            var tshark = tsharkCommand.Start();
-
             _log.Info("Starting TZSP packet stream processing.");
 
-            var result = await tshark.GetResultAsync(cancel);
-            cancelProcessingCts.Cancel();
-
-            if (!cancel.IsCancellationRequested && !result.Succeeded)
+            // TShark will exit after N packets have been processed, to enable us to cleanup temp files.
+            // We just run it in a loop until cancelled or until TShark fails.
+            while (!cancel.IsCancellationRequested)
             {
-                _log.Error("TShark exited with an error result. Review logs above to understand the details of the failure.");
-                Environment.ExitCode = -1;
+                // Sometimes (not always) TShark cleans up on its own.
+                // Better safe than sorry, though!
+                DeleteTemporaryFiles();
+
+                // We cancel processing if TShark exits or we get our own higher level CT signaled.
+                using var cancelProcessingCts = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+                var stdoutFinished = new SemaphoreSlim(0, 1);
+                var stderrFinished = new SemaphoreSlim(0, 1);
+
+                void ConsumeStandardOutput(Stream stdout)
+                {
+                    // Text mode output, each line consisting of:
+                    // 1. Hex string of packet bytes (starting with either outer UDP header or inner TZSP header)
+                    // 2. A space character.
+                    // 3. Type of the data ("eth:ethertype:ip:data" - UDP header, "eth:ethertype:ip:udp:data" - TZSP header)
+                    // 4. A space character.
+                    // 5. The destination UDP port of the TZSP protocol ("udp.dstport") but ONLY if type of data is TZSP header.
+                    //    If type of data is UDP header, we need to parse the port ourselves.
+
+                    try
+                    {
+                        var reader = new StreamReader(stdout, Encoding.UTF8, leaveOpen: true);
+
+                        while (true)
+                        {
+                            var line = reader.ReadLineAsync()
+                                .WithAbandonment(cancelProcessingCts.Token)
+                                .WaitAndUnwrapExceptions();
+
+                            if (line == null)
+                                break; // End of stream.
+
+                            string packetBytesHex;
+                            string packetType;
+
+                            var parts = line.Split(' ');
+                            if (parts.Length != 3)
+                                throw new NotSupportedException("Output line did not have expected number of components.");
+
+                            // On some systems there are colons. On others there are not!
+                            // Language/version differences? Whatever, get rid of them.
+                            packetBytesHex = parts[0].Replace(":", "");
+                            packetType = parts[1];
+
+                            var packetBytes = Helpers.Convert.HexStringToByteArray(packetBytesHex);
+
+                            try
+                            {
+                                if (packetType == "eth:ethertype:ip:data")
+                                {
+                                    ProcessTzspPacketWithUdpHeader(packetBytes);
+                                }
+                                else if (packetType == "eth:ethertype:ip:udp:data")
+                                {
+                                    var listenPort = ushort.Parse(parts[2]);
+                                    ProcessTzspPacket(packetBytes, listenPort);
+                                }
+                                else
+                                {
+                                    throw new NotSupportedException("Unexpected packet type: " + packetType);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _log.Error("Ignoring unsupported packet: " + Helpers.Debug.GetAllExceptionMessages(ex));
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // It's OK, we were cancelled because processing is finished.
+                    }
+                    catch (Exception ex)
+                    {
+                        // If we get here, something is fatally wrong with parsing logic or TShark output.
+                        _log.Error(Helpers.Debug.GetAllExceptionMessages(ex));
+
+                        // This should not happen, so stop everything. Gracefully, so we flush logs.
+                        Environment.ExitCode = -1;
+                        Program.MasterCancellation.Cancel();
+                    }
+                    finally
+                    {
+                        stdoutFinished.Release();
+                    }
+                };
+
+                void ConsumeStandardError(Stream stderr)
+                {
+                    // Only errors should show up here. We will simply log them for now
+                    // - only if tshark exits do we consider it a fatal error.
+
+                    try
+                    {
+                        var reader = new StreamReader(stderr, Encoding.UTF8, leaveOpen: true);
+
+                        while (true)
+                        {
+                            var line = reader.ReadLineAsync()
+                                .WithAbandonment(cancelProcessingCts.Token)
+                                .WaitAndUnwrapExceptions();
+
+                            if (line == null)
+                                break; // End of stream.
+
+                            _log.Error(line);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // It's OK, we were cancelled because processing is finished.
+                    }
+                    finally
+                    {
+                        stderrFinished.Release();
+                    }
+                };
+
+                var tsharkCommand = new ExternalTool
+                {
+                    ExecutablePath = Constants.TsharkExecutableName,
+                    ResultHeuristics = ExternalToolResultHeuristics.Linux,
+                    Arguments = @$"-i ""{ListenInterface}"" -f ""{MakeTsharkFilterString()}"" -p -T fields -e data.data -e frame.protocols -e udp.dstport -Eseparator=/s -Q -c {Constants.PacketsPerIteration}",
+                    StandardOutputConsumer = ConsumeStandardOutput,
+                    StandardErrorConsumer = ConsumeStandardError
+                };
+
+                var tshark = tsharkCommand.Start();
+                var result = await tshark.GetResultAsync(cancel);
+                cancelProcessingCts.Cancel();
+
+                // Wait for output processing threads to finish, so error messages are printed to logs before we exit.
+                _log.Debug("TShark finished iteration. Waiting for data processing threads to clean up and flush logs.");
+                await stderrFinished.WaitAsync();
+                await stdoutFinished.WaitAsync();
+
+                if (!cancel.IsCancellationRequested && !result.Succeeded)
+                {
+                    _log.Error("TShark exited with an error result. Review logs above to understand the details of the failure.");
+                    Environment.ExitCode = -1;
+                    break;
+                }
             }
 
             await _metricServer.StopAsync();
-
-            // Wait for output processing threads to finish, so error messages are printed to logs before we exit.
-            _log.Debug("Waiting for data processing threads to clean up and flush logs.");
-            await stderrFinished.WaitAsync();
-            await stdoutFinished.WaitAsync();
         }
 
         private static async Task VerifyTshark(CancellationToken cancel)
@@ -200,6 +209,24 @@ namespace TzspPacketStreamExporter
 
             if (!tsharkCheckResult.StandardOutput.StartsWith("TShark (Wireshark)"))
                 throw new NotSupportedException("Unrecognized TShark version/build.");
+        }
+
+        private static void DeleteTemporaryFiles()
+        {
+            var files = Directory.GetFiles(Path.GetTempPath(), "wireshark_*.pcapng");
+
+            foreach (var file in files)
+            {
+                try
+                {
+                    File.Delete(file);
+                    _log.Debug($"Deleted temporary file: {file}");
+                }
+                catch
+                {
+                    // It's fine - maybe it is in use by a parallel TShark instance!
+                }
+            }
         }
 
         private static readonly IPNetwork MulticastNetwork = IPNetwork.Parse("224.0.0.0/4");

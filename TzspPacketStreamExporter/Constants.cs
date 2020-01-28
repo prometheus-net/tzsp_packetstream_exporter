@@ -9,6 +9,12 @@ namespace TzspPacketStreamExporter
 
         public const ushort DefaultPublishPort = 9184;
 
+        /// <summary>
+        /// How many packets we process before we restart TShark.
+        /// This is necessary because we want to clean up the temporary files TShark generates.
+        /// </summary>
+        public const int PacketsPerIteration = 1_000_000;
+
         public static string TsharkExecutableName
         {
             get

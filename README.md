@@ -12,6 +12,7 @@ System requirements:
 * TShark (the command-line variant of [Wireshark](https://www.wireshark.org/#download))
   * On Ubuntu, the `tshark` package is sufficient.
   * On Windows, install the full version of Wireshark.
+* 2 GB of free space in the temporary files directory at runtime.
 
 The `tshark` command must be available in a new terminal. You may need to [register the installation directory in the PATH environment variable](https://www.architectryan.com/2018/03/17/add-to-the-path-on-windows-10/).
 
