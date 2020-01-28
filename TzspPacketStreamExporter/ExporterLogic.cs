@@ -150,6 +150,9 @@ namespace TzspPacketStreamExporter
                             if (line == null)
                                 break; // End of stream.
 
+                            if (line == "resetting session.")
+                                continue; // This is normal, just ignore.
+
                             _log.Error(line);
                         }
                     }
@@ -167,7 +170,9 @@ namespace TzspPacketStreamExporter
                 {
                     ExecutablePath = Constants.TsharkExecutableName,
                     ResultHeuristics = ExternalToolResultHeuristics.Linux,
-                    Arguments = @$"-i ""{ListenInterface}"" -f ""{MakeTsharkFilterString()}"" -p -T fields -e data.data -e frame.protocols -e udp.dstport -Eseparator=/s -Q -c {Constants.PacketsPerIteration}",
+                    // -M will reset the session periodically and release some RAM, reducing memory pressure
+                    // Otherwise, TShark will buffer everything in RAM until the iteration is finished.
+                    Arguments = @$"-i ""{ListenInterface}"" -f ""{MakeTsharkFilterString()}"" -p -T fields -e data.data -e frame.protocols -e udp.dstport -Eseparator=/s -Q -c {Constants.PacketsPerIteration} -M 100",
                     StandardOutputConsumer = ConsumeStandardOutput,
                     StandardErrorConsumer = ConsumeStandardError
                 };
