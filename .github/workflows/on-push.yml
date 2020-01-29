@@ -1,6 +1,4 @@
-on:
-  push:
-    branches: ['master']
+on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,3 +19,14 @@ jobs:
       with:
         name: Binaries
         path: Output
+    - name: Create GitHub release
+      uses: softprops/action-gh-release@v1
+      if: github.ref == 'heads/publish'
+      with:
+          files: |
+            Output/win-x64.zip
+            Output/linux-x64.zip
+          draft: true
+          name: ${{ steps.make_version_string.outputs.versionstring }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.github_release_token }}
