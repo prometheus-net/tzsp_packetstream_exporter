@@ -1,13 +1,9 @@
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
 
 Push-Location
 try {
   Set-Location $PSScriptRoot
-
-  Write-Host "Current directory is: "
-  Get-Location | Out-Host
-
-  Get-ChildItem
 
   dotnet publish -c Release -r linux-x64
   if ($LASTEXITCODE -ne 0) {
