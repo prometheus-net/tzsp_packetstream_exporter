@@ -2,4 +2,4 @@
 
 [assembly: AssemblyCompany("prometheus-net")]
 [assembly: AssemblyProduct("TZSP packet stream analysis exporter")]
-[assembly: AssemblyVersion("1.1.2")]
+[assembly: AssemblyVersion("1.1.3")]

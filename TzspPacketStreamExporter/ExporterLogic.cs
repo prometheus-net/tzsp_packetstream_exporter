@@ -2,6 +2,7 @@
 using Prometheus;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -43,8 +44,13 @@ namespace TzspPacketStreamExporter
 
             // TShark will exit after N packets have been processed, to enable us to cleanup temp files.
             // We just run it in a loop until cancelled or until TShark fails.
+            // This stopwatch measures duration of data lost between iterations.
+            var lostTime = new Stopwatch();
+
             while (!cancel.IsCancellationRequested)
             {
+                IterationCount.Inc();
+
                 // Sometimes (not always) TShark cleans up on its own.
                 // Better safe than sorry, though!
                 DeleteTemporaryFiles();
@@ -178,16 +184,26 @@ namespace TzspPacketStreamExporter
                 };
 
                 var tshark = tsharkCommand.Start();
+                lostTime.Stop();
+                SecondsLost.Inc(lostTime.Elapsed.TotalSeconds);
+
                 var result = await tshark.GetResultAsync(cancel);
+                lostTime.Restart();
                 cancelProcessingCts.Cancel();
 
-                // Wait for output processing threads to finish, so error messages are printed to logs before we exit.
-                _log.Debug("TShark finished iteration. Waiting for data processing threads to clean up and flush logs.");
-                await stderrFinished.WaitAsync();
-                await stdoutFinished.WaitAsync();
+                if (cancel.IsCancellationRequested || !result.Succeeded)
+                {
+                    // Either of these means we are exiting, so we want to ensure logs are more or less complete.
+                    // If we are not exiting, we do not need to wait for old process logs to flush before starting
+                    // a new process, because we want to optimize for fast iterations.
+                    _log.Debug("Waiting for data processing threads to clean up and flush logs.");
+                    await stderrFinished.WaitAsync();
+                    await stdoutFinished.WaitAsync();
+                }
 
                 if (!cancel.IsCancellationRequested && !result.Succeeded)
                 {
+                    // We are exiting either way but we only consider it an error if not cancelled.
                     _log.Error("TShark exited with an error result. Review logs above to understand the details of the failure.");
                     Environment.ExitCode = -1;
                     break;
@@ -218,20 +234,24 @@ namespace TzspPacketStreamExporter
 
         private static void DeleteTemporaryFiles()
         {
-            var files = Directory.GetFiles(Path.GetTempPath(), "wireshark_*.pcapng");
-
-            foreach (var file in files)
+            // Kick off to a separate thread so we don't bother the main logic.
+            Helpers.Async.BackgroundThreadInvoke(delegate
             {
-                try
+                var files = Directory.GetFiles(Path.GetTempPath(), "wireshark_*.pcapng");
+
+                foreach (var file in files)
                 {
-                    File.Delete(file);
-                    _log.Debug($"Deleted temporary file: {file}");
+                    try
+                    {
+                        File.Delete(file);
+                        _log.Debug($"Deleted temporary file: {file}");
+                    }
+                    catch
+                    {
+                        // It's fine - maybe it is in use by a parallel TShark instance!
+                    }
                 }
-                catch
-                {
-                    // It's fine - maybe it is in use by a parallel TShark instance!
-                }
-            }
+            });
         }
 
         private static readonly IPNetwork MulticastNetwork = IPNetwork.Parse("224.0.0.0/4");
@@ -416,6 +436,10 @@ namespace TzspPacketStreamExporter
                 "listen_port"
             }
         });
+
+        private static readonly Counter IterationCount = Metrics.CreateCounter("tzsp_capture_iterations_total", "Total number of packet capture iterations that have been executed. A new iteration is periodically started to allow for cleanup of temporary data.");
+
+        private static readonly Counter SecondsLost = Metrics.CreateCounter("tzsp_data_lost_between_iterations_seconds_total", "Measures the total duration of data lost between capture iterations.");
 
         private static readonly LogSource _log = Log.Default;
     }
