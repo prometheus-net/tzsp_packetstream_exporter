@@ -16,5 +16,5 @@ if (!(Test-Path ./Output/)) {
 
 Get-ChildItem ./Output/ | Remove-Item
 
-Compress-Archive -Path ./TzspPacketStreamExporter/bin/Release/netcoreapp3.1/linux-x64/publish/* -DestinationPath ./Output/linux-x64.zip
-Compress-Archive -Path ./TzspPacketStreamExporter/bin/Release/netcoreapp3.1/win-x64/publish/* -DestinationPath ./Output/win-x64.zip
+Compress-Archive -Path ./bin/Release/netcoreapp3.1/linux-x64/publish/* -DestinationPath ./Output/linux-x64.zip
+Compress-Archive -Path ./bin/Release/netcoreapp3.1/win-x64/publish/* -DestinationPath ./Output/win-x64.zip

@@ -1,0 +1,19 @@
+on:
+  push:
+    branches: ['master']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - id: make_version_string
+      uses: sandersaares-actions/make-version-string@master
+      with:
+        assemblyInfoPath: AssemblyInfo.cs
+        primaryBranch: 'publish'
+    - uses: sandersaares-actions/expand-tokens@master
+      env:
+        version: ${{ steps.make_version_string.outputs.versionstring }}
+      with:
+        path: Constants.cs
+    - run: docker run --rm --volume $GITHUB_WORKSPACE:/github/workspace mcr.microsoft.com/dotnet/core/sdk:3.1-alpine pwsh -File /github/workspace/Build.ps1
