@@ -24,5 +24,6 @@ jobs:
             Output/linux-x64.zip
           draft: true
           name: ${{ steps.make_version_string.outputs.versionstring }}
+          tag_name: v${{ steps.make_version_string.outputs.versionstring }}
       env:
         GITHUB_TOKEN: ${{ secrets.github_release_token }}
