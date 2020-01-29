@@ -15,10 +15,6 @@ jobs:
       with:
         path: Constants.cs
     - run: docker run --rm --volume $GITHUB_WORKSPACE:/github/workspace mcr.microsoft.com/dotnet/core/sdk:3.1-alpine pwsh -File /github/workspace/Build.ps1
-    - uses: actions/upload-artifact@v1
-      with:
-        name: Binaries
-        path: Output
     - name: Create GitHub release
       uses: softprops/action-gh-release@v1
       if: github.ref == 'refs/heads/publish'
