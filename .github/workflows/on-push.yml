@@ -17,12 +17,11 @@ jobs:
     - run: docker run --rm --volume $GITHUB_WORKSPACE:/github/workspace mcr.microsoft.com/dotnet/core/sdk:3.1-alpine pwsh -File /github/workspace/Build.ps1
     - name: Create GitHub release
       uses: softprops/action-gh-release@v1
-      if: github.ref == 'refs/heads/master'
+      if: github.ref == 'refs/heads/publish'
       with:
           files: |
             Output/win-x64.zip
             Output/linux-x64.zip
-          draft: true
           name: ${{ steps.make_version_string.outputs.versionstring }}
           tag_name: v${{ steps.make_version_string.outputs.versionstring }}
       env:
